@@ -605,10 +605,11 @@ public class Game : MonoBehaviour
             float a = Mathf.Sin(Time.time * 0.15f) * 0.9f + Mathf.PI;
             var focus = Course.start + Vector3.up * 1.0f;
             var want = focus + new Vector3(Mathf.Sin(a) * 6.5f, 1.3f + Mathf.Sin(Time.time * 0.21f) * 0.4f, Mathf.Cos(a) * 6.5f);
-            if (portrait) want = focus + (want - focus) * 1.25f + Vector3.up * 1.5f;
+            if (portrait) want = focus + (want - focus) * 1.05f + Vector3.up * 0.9f;
             Cam.transform.position = Vector3.SmoothDamp(Cam.transform.position, want, ref camVel, 0.8f);
             // landscape: the menu column sits on the right, so frame the runner on the left
-            var look = focus + Vector3.up * (portrait ? -0.6f : 0.8f) + (UI.Landscape ? Cam.transform.right * 2.6f : Vector3.zero);
+            // phones: aim below the runner so it sits in the gap between the logo and the course cards
+            var look = focus + Vector3.up * (portrait ? -1.75f : 0.8f) + (UI.Landscape ? Cam.transform.right * 2.6f : Vector3.zero);
             Cam.transform.rotation = Quaternion.LookRotation(look - Cam.transform.position);
             Cam.fieldOfView = portrait ? 62f : 48f;
             sky.transform.position = Cam.transform.position;
