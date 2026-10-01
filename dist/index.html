@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>OBBY RUSH — 3D obby speedruns</title>
+  <meta name="description" content="Jump, dodge and speedrun 3D obstacle courses in your browser. Race your ghost, the world record, or up to 8 real players live. Free, no download.">
+  <meta name="theme-color" content="#1b1340">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="OBBY RUSH — 3D obby speedruns">
+  <meta property="og:description" content="Jump. Dodge. Speedrun. Race real players live — free, no download.">
+  <meta property="og:image" content="__SITE_URL__/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="__SITE_URL__/og.png">
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1b1340; touch-action: none; overscroll-behavior: none;
+      -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #fff; }
+    #unity-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; background: #1b1340; outline: none; }
+    #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 5;
+      background: radial-gradient(circle at 50% 38%, #4a2ea8 0%, #1b1340 65%); transition: opacity .5s; overflow: hidden; }
+    #loader.done { opacity: 0; pointer-events: none; }
+    .stage { position: relative; width: 220px; height: 150px; }
+    .blk { position: absolute; bottom: 0; width: 56px; height: 34px; border-radius: 8px; box-shadow: inset 0 -10px 0 rgba(0,0,0,.18); }
+    .b1 { left: 0; background: #5be37d; } .b2 { left: 82px; bottom: 26px; background: #35d6ff; } .b3 { left: 164px; bottom: 52px; background: #ffd84a; }
+    .hero { position: absolute; width: 30px; height: 40px; left: 13px; bottom: 34px; border-radius: 10px 10px 6px 6px; background: #ff4f8b;
+      box-shadow: inset 0 -8px 0 rgba(0,0,0,.2); animation: hop 1.8s cubic-bezier(.3,.1,.4,1) infinite; }
+    .hero::after { content: ""; position: absolute; top: 9px; left: 15px; width: 10px; height: 8px; border-radius: 3px; background: #fff; }
+    @keyframes hop { 0% { transform: translate(0,0); } 22% { transform: translate(41px,-60px) rotate(-12deg); } 33% { transform: translate(82px,-26px); }
+      55% { transform: translate(123px,-86px) rotate(-12deg); } 66% { transform: translate(164px,-52px); } 88% { transform: translate(164px,-52px); } 100% { transform: translate(0,0); opacity: 0; } }
+    h1 { margin: 26px 0 4px; font-size: 52px; font-weight: 900; font-style: italic; letter-spacing: 3px; text-shadow: 0 6px 0 #6b3cff, 0 0 30px rgba(255,79,139,.55); }
+    .tag { opacity: .75; font-weight: 800; letter-spacing: 3px; font-size: 13px; }
+    .bar { width: 240px; height: 10px; border-radius: 10px; background: rgba(255,255,255,.14); margin-top: 28px; overflow: hidden; }
+    .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #35d6ff, #ff4f8b); transition: width .2s; border-radius: 10px; }
+    #err { display: none; max-width: 320px; text-align: center; margin-top: 18px; font-size: 14px; opacity: .85; }
+  </style>
+</head>
+<body>
+  <canvas id="unity-canvas" tabindex="-1"></canvas>
+  <div id="loader">
+    <div class="stage"><div class="blk b1"></div><div class="blk b2"></div><div class="blk b3"></div><div class="hero"></div></div>
+    <h1>OBBY RUSH</h1>
+    <div class="tag">JUMP · DODGE · SPEEDRUN</div>
+    <div class="bar"><i id="fill"></i></div>
+    <div id="err"></div>
+  </div>
+  <div id="toast" style="position:fixed;left:50%;bottom:40px;transform:translateX(-50%);background:#fff;color:#1b1340;font-weight:800;padding:12px 20px;border-radius:999px;opacity:0;transition:opacity .25s;z-index:30;pointer-events:none"></div>
+  <script>
+    // ---- Portal adapter: Poki / CrazyGames if present, otherwise a dev fallback that just grants rewards.
+    (function () {
+      var poki = function () { return window.PokiSDK; };
+      var crazy = function () { return window.CrazyGames && window.CrazyGames.SDK; };
+      window.orToast = function (m) { var t = document.getElementById("toast"); t.textContent = m; t.style.opacity = 1; clearTimeout(window.__gt); window.__gt = setTimeout(function () { t.style.opacity = 0; }, 2000); };
+      window.SD = {
+        adsAvailable: function () { return !!(poki() || crazy()); },   // rewarded ads only where a portal SDK exists
+        rewarded: function () {
+          if (poki()) return poki().rewardedBreak().then(function (ok) { return !!ok; });
+          if (crazy()) return new Promise(function (res) {
+            crazy().ad.requestAd("rewarded", { adFinished: function () { res(true); }, adError: function () { res(false); } });
+          });
+          return new Promise(function (res) { setTimeout(function () { res(true); }, 400); }); // dev: instant reward
+        },
+        gameplay: function (on) {
+          try { if (poki()) on ? poki().gameplayStart() : poki().gameplayStop(); } catch (e) {}
+          try { if (crazy()) on ? crazy().game.gameplayStart() : crazy().game.gameplayStop(); } catch (e) {}
+        },
+        ready: function () {
+          try { if (poki()) poki().gameLoadingFinished(); } catch (e) {}
+          try { if (crazy()) crazy().game.loadingStop(); } catch (e) {}
+        },
+        track: function (name, value) {
+          try { window.va && window.va("event", { name: name, data: { value: value } }); } catch (e) {}
+        }
+      };
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+      ["gesturestart", "gesturechange", "contextmenu", "dblclick"].forEach(function (ev) {
+        document.addEventListener(ev, function (e) { e.preventDefault(); }, { passive: false });
+      });
+      document.addEventListener("touchmove", function (e) { e.preventDefault(); }, { passive: false });
+    })();
+
+    (function () {
+      var canvas = document.getElementById("unity-canvas"), loader = document.getElementById("loader");
+      var fill = document.getElementById("fill"), err = document.getElementById("err");
+      var buildUrl = "Build";
+      var config = {
+        dataUrl: buildUrl + "/eeb67f11e371ce350c017e905ec6151c.data.unityweb",
+        frameworkUrl: buildUrl + "/f91fc4a78274bceac8a030fc4a147bad.framework.js.unityweb",
+        codeUrl: buildUrl + "/257e8f628b60a526e0b00b2a83f459ca.wasm.unityweb",
+        streamingAssetsUrl: "StreamingAssets",
+        autoSyncPersistentDataPath: true,
+        companyName: "ObbyRush",
+        productName: "Obby Rush",
+        productVersion: "1.0.0",
+        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+        showBanner: function (msg, type) { if (type === "error") { err.style.display = "block"; err.textContent = msg; } console.warn(msg); }
+      };
+      var s = document.createElement("script");
+      s.src = buildUrl + "/da032498a3e08cbd15fd133288307074.loader.js";
+      s.onload = function () {
+        try { window.CrazyGames && window.CrazyGames.SDK && window.CrazyGames.SDK.game.loadingStart(); } catch (e) {}
+        createUnityInstance(canvas, config, function (p) { fill.style.width = Math.round(8 + p * 92) + "%"; })
+          .then(function (inst) { window.unityInstance = inst; window.obby && window.obby.ready();
+            document.addEventListener("visibilitychange", function () { if (document.hidden) { try { inst.SendMessage("Game", "Persist"); } catch (e) {} } });
+            window.addEventListener("pagehide", function () { try { inst.SendMessage("Game", "Persist"); } catch (e) {} }); fill.style.width = "100%"; setTimeout(function () { loader.classList.add("done"); canvas.focus(); }, 300); })
+          .catch(function (m) { err.style.display = "block"; err.textContent = "Couldn't start: " + m; });
+      };
+      document.body.appendChild(s);
+    })();
+  </script>
+  <script src="obby.js"></script>
+  <script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>
