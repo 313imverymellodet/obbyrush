@@ -61,7 +61,7 @@ public class Game : MonoBehaviour
         WebGLInput.captureAllKeyboardInput = false;
 #endif
         var url = Application.absoluteURL ?? "";
-        Dev = url.Contains("dev=1");
+        Dev = url.Contains("dev=1") && (url.Contains("://localhost") || url.Contains("://127.0.0.1"));   // cheats never on the live site
         DevCam.Install(Dev);
         var json = PlayerPrefs.GetString("or_save", "");
         Save = string.IsNullOrEmpty(json) ? new SaveData() : JsonUtility.FromJson<SaveData>(json) ?? new SaveData();
@@ -491,6 +491,9 @@ public class Game : MonoBehaviour
     }
 
     public void ToggleMute() { Save.muted = !Save.muted; Sfx.I.SetMuted(Save.muted); Persist(); }
+
+    // solo runs pause when the window loses focus (the clock would keep running); live races carry on
+    void OnApplicationFocus(bool f) { if (!f && !Online && (State == St.Countdown || State == St.Run) && Time.timeScale > 0) Pause(); }
 
     public void Pause()
     {

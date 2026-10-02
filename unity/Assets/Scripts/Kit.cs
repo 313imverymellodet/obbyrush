@@ -11,7 +11,8 @@ public static class Kit
     static readonly Dictionary<Material, Material> matFix = new Dictionary<Material, Material>();
     static readonly Dictionary<string, Material> matByLook = new Dictionary<string, Material>();
     static Font font;
-    public static Font Font => font ? font : (font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
+    // Lilita One (SIL OFL 1.1): the arcade-wide display face. It is already heavy, so UI text never asks Unity for faux bold.
+    public static Font Font => font ? font : (font = Resources.Load<Font>("Fonts/LilitaOne") ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
 
     static Material unlitAlpha;
     public static Material UnlitAlpha => unlitAlpha ? unlitAlpha : (unlitAlpha = Resources.Load<Material>("UnlitAlpha"));
@@ -347,5 +348,57 @@ public static class Kit
     {
         const float c1 = 1.70158f, c3 = c1 + 1f;
         return 1f + c3 * Mathf.Pow(t - 1f, 3) + c1 * Mathf.Pow(t - 1f, 2);
+    }
+
+    // ---------------- legibility scrims for menus over busy 3D scenes
+    static Sprite fadeUp, fadeDown;
+    static Sprite FadeSprite(bool opaqueAtTop)
+    {
+        var t = new Texture2D(1, 64, TextureFormat.RGBA32, false);
+        for (int y = 0; y < 64; y++)
+        {
+            float k = opaqueAtTop ? y / 63f : 1f - y / 63f;
+            t.SetPixel(0, y, new Color(1, 1, 1, k * k * (3f - 2f * k)));
+        }
+        t.wrapMode = TextureWrapMode.Clamp; t.Apply();
+        return Sprite.Create(t, new Rect(0, 0, 1, 64), new Vector2(.5f, .5f));
+    }
+    // A full-width band fading from `c` at the top (or bottom) screen edge to clear, `height` reference units tall.
+    public static void Scrim(Transform parent, bool atTop, float height, Color c)
+    {
+        var go = new GameObject("scrim", typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        var rt = (RectTransform)go.transform;
+        rt.anchorMin = new Vector2(0, atTop ? 1 : 0); rt.anchorMax = new Vector2(1, atTop ? 1 : 0);
+        rt.pivot = new Vector2(.5f, atTop ? 1 : 0); rt.sizeDelta = new Vector2(0, height); rt.anchoredPosition = Vector2.zero;
+        var img = go.AddComponent<UnityEngine.UI.Image>();
+        img.sprite = atTop ? (fadeDown ? fadeDown : fadeDown = FadeSprite(true)) : (fadeUp ? fadeUp : fadeUp = FadeSprite(false));
+        img.color = c; img.raycastTarget = false;
+        go.transform.SetAsFirstSibling();
+    }
+}
+
+// Buttons dip while held: on a touch screen that is the only feedback that the tap registered.
+public class Press : MonoBehaviour, UnityEngine.EventSystems.IPointerDownHandler, UnityEngine.EventSystems.IPointerUpHandler, UnityEngine.EventSystems.IPointerExitHandler
+{
+    public float Sink;              // reference units to drop (buttons drawn over a separate shadow)
+    Vector3 scale; Vector2 pos; bool down;
+    public void OnPointerDown(UnityEngine.EventSystems.PointerEventData e)
+    {
+        if (down) return;
+        down = true;
+        var rt = (RectTransform)transform;
+        scale = rt.localScale; pos = rt.anchoredPosition;
+        if (Sink > 0) rt.anchoredPosition = pos - new Vector2(0, Sink); else rt.localScale = scale * 0.95f;
+    }
+    public void OnPointerUp(UnityEngine.EventSystems.PointerEventData e) => Release();
+    public void OnPointerExit(UnityEngine.EventSystems.PointerEventData e) => Release();
+    void OnDisable() => Release();
+    void Release()
+    {
+        if (!down) return;
+        down = false;
+        var rt = (RectTransform)transform;
+        if (Sink > 0) rt.anchoredPosition = pos; else rt.localScale = scale;
     }
 }

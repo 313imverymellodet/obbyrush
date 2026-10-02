@@ -48,9 +48,9 @@ public class UI : MonoBehaviour
         screens = Fill("screens", root);
 
         countText = Txt(root, "", 280, new Vector2(.5f, .6f), Vector2.zero, Color.white, TextAnchor.MiddleCenter, 1000);
-        countText.fontStyle = FontStyle.BoldAndItalic; Outline(countText, 7); countText.gameObject.SetActive(false);
+        countText.fontStyle = FontStyle.Italic; Outline(countText, 7); countText.gameObject.SetActive(false);
         bannerText = Txt(root, "", 100, new Vector2(.5f, .7f), Vector2.zero, Gold, TextAnchor.MiddleCenter, 1400);
-        bannerText.fontStyle = FontStyle.BoldAndItalic; Outline(bannerText, 5);
+        bannerText.fontStyle = FontStyle.Italic; Outline(bannerText, 5);
         bannerSub = Txt(root, "", 46, new Vector2(.5f, .7f), new Vector2(0, -92), Color.white, TextAnchor.MiddleCenter, 1400);
         Outline(bannerSub, 3);
         bannerText.gameObject.SetActive(false); bannerSub.gameObject.SetActive(false);
@@ -84,9 +84,10 @@ public class UI : MonoBehaviour
     }
     Text Txt(Transform p, string s, int size, Vector2 anchor, Vector2 pos, Color c, TextAnchor align = TextAnchor.MiddleCenter, float w = 700)
     {
+        size = Mathf.Max(size, 30);   // readable floor: Lilita below this turns to mush on phones and short desktop windows
         var rt = Rect("txt", p, anchor, pos, new Vector2(w, size * 1.4f));
         var t = rt.gameObject.AddComponent<Text>();
-        t.font = F; t.fontSize = size; t.fontStyle = FontStyle.Bold; t.alignment = align; t.color = c; t.text = s;
+        t.font = F; t.fontSize = size; t.fontStyle = FontStyle.Normal; t.alignment = align; t.color = c; t.text = s;
         t.raycastTarget = false; t.horizontalOverflow = HorizontalWrapMode.Overflow; t.verticalOverflow = VerticalWrapMode.Overflow;
         return t;
     }
@@ -99,8 +100,9 @@ public class UI : MonoBehaviour
         lip.SetAsFirstSibling(); lip.pivot = new Vector2(.5f, 0);
         var b = rt.gameObject.AddComponent<Button>(); b.targetGraphic = rt.GetComponent<Image>();
         b.onClick.AddListener(() => { Sfx.I.Click(); onClick(); });
+        rt.gameObject.AddComponent<Press>();
         var t = Txt(rt, label, fs, new Vector2(.5f, .5f), Vector2.zero, fg, TextAnchor.MiddleCenter, size.x);
-        t.fontStyle = FontStyle.BoldAndItalic;
+        t.fontStyle = FontStyle.Italic;
         return b;
     }
 
@@ -168,7 +170,7 @@ public class UI : MonoBehaviour
         var jImg = j.gameObject.AddComponent<Image>(); jImg.sprite = disc; jImg.color = Kit.A(Pink, 0.75f);
         jumpBtn = j.gameObject.AddComponent<HoldButton>();
         var jr = Img(j, ring, new Vector2(.5f, .5f), Vector2.zero, new Vector2(280, 280)); jr.color = Color.white;
-        var jt = Txt(j, "JUMP", 50, new Vector2(.5f, .5f), Vector2.zero, Color.white); jt.fontStyle = FontStyle.BoldAndItalic; Outline(jt, 3);
+        var jt = Txt(j, "JUMP", 50, new Vector2(.5f, .5f), Vector2.zero, Color.white); jt.fontStyle = FontStyle.Italic; Outline(jt, 3);
 
         keysHint = Txt(hud, "MOVE  WASD / ARROWS     JUMP  SPACE (x2 in the air)     CAMERA  DRAG or Q / E     R  CHECKPOINT", 24, new Vector2(.5f, 0), new Vector2(0, 36), new Color(1, 1, 1, 0.55f), TextAnchor.MiddleCenter, 1800);
         Outline(keysHint, 2);
@@ -176,16 +178,16 @@ public class UI : MonoBehaviour
         // top: timer + delta
         var tb = Box(hud, new Vector2(.5f, 1), new Vector2(0, -95), new Vector2(430, 120), new Color(0.1f, 0.06f, 0.25f, 0.55f));
         timeText = Txt(tb, "0:00.00", 80, new Vector2(.5f, .5f), new Vector2(0, 2), Color.white, TextAnchor.MiddleCenter, 430);
-        timeText.fontStyle = FontStyle.BoldAndItalic; Outline(timeText, 3);
+        timeText.fontStyle = FontStyle.Italic; Outline(timeText, 3);
         deltaText = Txt(hud, "", 40, new Vector2(.5f, 1), new Vector2(0, -190), Lime, TextAnchor.MiddleCenter, 600);
-        deltaText.fontStyle = FontStyle.BoldAndItalic; Outline(deltaText, 3);
+        deltaText.fontStyle = FontStyle.Italic; Outline(deltaText, 3);
 
         // top-left: checkpoint + stars
         cpText = Txt(hud, "", 40, new Vector2(0, 1), new Vector2(480, -78), Color.white, TextAnchor.MiddleLeft, 400);
-        cpText.fontStyle = FontStyle.BoldAndItalic; Outline(cpText, 3);
+        cpText.fontStyle = FontStyle.Italic; Outline(cpText, 3);
         for (int i = 0; i < 3; i++) hudStars[i] = StarIcon(hud, new Vector2(0, 1), new Vector2(305 + i * 52, -132), 48, Gold);
         placeText = Txt(hud, "", 110, new Vector2(1, 1), new Vector2(-150, -110), Gold, TextAnchor.MiddleCenter, 300);
-        placeText.fontStyle = FontStyle.BoldAndItalic; Outline(placeText, 5);
+        placeText.fontStyle = FontStyle.Italic; Outline(placeText, 5);
 
         Btn(hud, "II", new Vector2(0, 1), new Vector2(80, -100), new Vector2(110, 110), new Color(0.1f, 0.06f, 0.25f, 0.6f), Color.white, () => Game.I.Pause(), 46);
         Btn(hud, "<<", new Vector2(0, 1), new Vector2(205, -100), new Vector2(110, 110), new Color(0.1f, 0.06f, 0.25f, 0.6f), Gold, () => Game.I.BackToCheckpoint(), 40);
@@ -279,9 +281,9 @@ public class UI : MonoBehaviour
 
     Text Title(Transform p, string s, float y, int size, Color c)
     {
-        Txt(p, s, size, new Vector2(.5f, 1), new Vector2(7, y - 9), new Color(0.1f, 0.05f, 0.3f, 0.8f), TextAnchor.MiddleCenter, 1400).fontStyle = FontStyle.BoldAndItalic;
+        Txt(p, s, size, new Vector2(.5f, 1), new Vector2(7, y - 9), new Color(0.1f, 0.05f, 0.3f, 0.8f), TextAnchor.MiddleCenter, 1400).fontStyle = FontStyle.Italic;
         var t = Txt(p, s, size, new Vector2(.5f, 1), new Vector2(0, y), c, TextAnchor.MiddleCenter, 1400);
-        t.fontStyle = FontStyle.BoldAndItalic;
+        t.fontStyle = FontStyle.Italic;
         return t;
     }
 
@@ -311,10 +313,10 @@ public class UI : MonoBehaviour
             bool sel = i == g.Course.index;
             var card = Box(s, new Vector2(.5f, 0), new Vector2((i - 1) * 345, 900), new Vector2(330, 290), sel ? Kit.A(Course.Accent[i], 0.95f) : new Color(0.1f, 0.06f, 0.25f, 0.6f), true);
             var nm = Txt(card, Course.Names[i].Replace(" ", "\n"), 46, new Vector2(.5f, .5f), new Vector2(0, 70), sel ? Ink : Color.white, TextAnchor.MiddleCenter, 320);
-            nm.fontStyle = FontStyle.BoldAndItalic; nm.lineSpacing = 0.85f;
+            nm.fontStyle = FontStyle.Italic; nm.lineSpacing = 0.85f;
             Txt(card, Course.Tags[i].Split(' ')[0], 26, new Vector2(.5f, .5f), new Vector2(0, -10), sel ? Kit.A(Ink, 0.75f) : Soft, TextAnchor.MiddleCenter, 320);
             float best = g.Save.best[i];
-            Txt(card, best > 0 ? Time(best) : "--:--", 40, new Vector2(.5f, .5f), new Vector2(0, -62), sel ? Ink : Color.white, TextAnchor.MiddleCenter, 320).fontStyle = FontStyle.BoldAndItalic;
+            Txt(card, best > 0 ? Time(best) : "--:--", 40, new Vector2(.5f, .5f), new Vector2(0, -62), sel ? Ink : Color.white, TextAnchor.MiddleCenter, 320).fontStyle = FontStyle.Italic;
             StarsRow(card, g.Save.stars[i], 3, new Vector2(.5f, .5f), new Vector2(0, -112), 44, sel ? Ink : Gold, sel ? Kit.A(Ink, 0.25f) : new Color(1, 1, 1, 0.25f));
             var btn = card.gameObject.AddComponent<Button>(); btn.targetGraphic = card.GetComponent<Image>();
             var id = Course.Ids[i];
@@ -369,10 +371,10 @@ public class UI : MonoBehaviour
             var card = Box(s, new Vector2(.5f, 1), new Vector2((i % 3 - 1) * 330, -480 - (i / 3) * 330), new Vector2(310, 310), sel ? Kit.A(Pink, 0.9f) : owned ? new Color(1, 1, 1, 0.14f) : new Color(0, 0, 0, 0.35f), true);
             var ic = Img(card, Icon(sk.id), new Vector2(.5f, .5f), new Vector2(0, 28), new Vector2(230, 230));
             if (!owned) ic.color = new Color(0.15f, 0.12f, 0.3f, 1f);
-            Txt(card, sk.name, 32, new Vector2(.5f, 0), new Vector2(0, 34), Color.white, TextAnchor.MiddleCenter, 310).fontStyle = FontStyle.BoldAndItalic;
+            Txt(card, sk.name, 32, new Vector2(.5f, 0), new Vector2(0, 34), Color.white, TextAnchor.MiddleCenter, 310).fontStyle = FontStyle.Italic;
             if (!owned)
             {
-                Txt(card, sk.stars.ToString(), 70, new Vector2(.5f, .5f), new Vector2(-30, 40), Gold, TextAnchor.MiddleCenter, 160).fontStyle = FontStyle.BoldAndItalic;
+                Txt(card, sk.stars.ToString(), 70, new Vector2(.5f, .5f), new Vector2(-30, 40), Gold, TextAnchor.MiddleCenter, 160).fontStyle = FontStyle.Italic;
                 StarIcon(card, new Vector2(.5f, .5f), new Vector2(40, 42), 64, Gold);
             }
             var b = card.gameObject.AddComponent<Button>(); b.targetGraphic = card.GetComponent<Image>();
@@ -440,7 +442,7 @@ public class UI : MonoBehaviour
         bool pb = Mathf.Abs(g.Save.best[ci] - g.FinishTime) < 0.001f;
         Title(s, pb ? "NEW BEST!" : "FINISHED!", -210, 130, pb ? Gold : Color.white);
         var big = Txt(s, Time(g.FinishTime), 150, new Vector2(.5f, 1), new Vector2(0, -380), Color.white, TextAnchor.MiddleCenter, 1000);
-        big.fontStyle = FontStyle.BoldAndItalic; Outline(big, 5);
+        big.fontStyle = FontStyle.Italic; Outline(big, 5);
         Txt(s, g.Course.name + "   -   " + (g.Falls == 0 ? "NO FALLS!" : g.Falls + (g.Falls == 1 ? " FALL" : " FALLS")), 36, new Vector2(.5f, 1), new Vector2(0, -490), Gold, TextAnchor.MiddleCenter, 1000);
         StarsRow(s, g.RunStars, g.Course.stars.Count, new Vector2(.5f, 1), new Vector2(0, -548), 48, Gold, new Color(1, 1, 1, 0.25f));
         rankText = Txt(s, pb ? "Saving your ghost..." : "PERSONAL BEST  " + Time(g.Save.best[ci]), 36, new Vector2(.5f, 1), new Vector2(0, -610), pb ? Lime : Soft, TextAnchor.MiddleCenter, 1000);
@@ -468,7 +470,7 @@ public class UI : MonoBehaviour
         {
             var (name, t, kind) = list[i];
             var row = Box(resultsList, new Vector2(.5f, 1), new Vector2(0, -i * 82), new Vector2(940, 74), kind == 0 ? Kit.A(Pink, 0.55f) : new Color(1, 1, 1, i % 2 == 0 ? 0.1f : 0.05f));
-            Txt(row, (t > 0 ? (i + 1).ToString() : "-"), 40, new Vector2(0, .5f), new Vector2(55, 0), i == 0 && t > 0 ? Gold : Color.white, TextAnchor.MiddleCenter, 90).fontStyle = FontStyle.BoldAndItalic;
+            Txt(row, (t > 0 ? (i + 1).ToString() : "-"), 40, new Vector2(0, .5f), new Vector2(55, 0), i == 0 && t > 0 ? Gold : Color.white, TextAnchor.MiddleCenter, 90).fontStyle = FontStyle.Italic;
             Txt(row, name + (kind == 2 ? "  (GHOST)" : ""), 36, new Vector2(0, .5f), new Vector2(380, 0), kind == 1 ? Cyan : kind == 2 ? Ghosty : Color.white, TextAnchor.MiddleLeft, 520);
             Txt(row, t > 0 ? Time(t) : "RUNNING...", 36, new Vector2(1, .5f), new Vector2(-140, 0), Color.white, TextAnchor.MiddleRight, 260);
         }
