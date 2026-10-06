@@ -18,7 +18,9 @@ public class UI : MonoBehaviour
     public Vector2 Stick => stick ? stick.Value : Vector2.zero;
     public bool JumpHeld => jumpBtn && jumpBtn.Held;
     public bool JumpPressed { get { if (jumpBtn && jumpBtn.Pressed) { jumpBtn.Pressed = false; return true; } return false; } }
-    VirtualStick stick; HoldButton jumpBtn;
+    VirtualStick stick; HoldButton jumpBtn, rewindBtn;
+    public bool RewindHeld => rewindBtn && rewindBtn.Held;
+    Image rewindFill, vhs, vhsTint; Text rewindLabel, rewindBanner, rewindKey; RectTransform rewindRt; float vhsT;
 
     // hud
     Text timeText, deltaText, cpText, placeText, bannerText, bannerSub, countText, toastText, rankText, keysHint, wrText;
@@ -172,7 +174,18 @@ public class UI : MonoBehaviour
         var jr = Img(j, ring, new Vector2(.5f, .5f), Vector2.zero, new Vector2(280, 280)); jr.color = Color.white;
         var jt = Txt(j, "JUMP", 50, new Vector2(.5f, .5f), Vector2.zero, Color.white); jt.fontStyle = FontStyle.Italic; Outline(jt, 3);
 
-        keysHint = Txt(hud, "MOVE  WASD / ARROWS     JUMP  SPACE (x2 in the air)     CAMERA  DRAG or Q / E     R  CHECKPOINT", 24, new Vector2(.5f, 0), new Vector2(0, 36), new Color(1, 1, 1, 0.55f), TextAnchor.MiddleCenter, 1800);
+        // REWIND: a button with its meter as a filling ring (touch), Shift / Z on keyboards
+        rewindRt = Rect("rewind", controls, new Vector2(1, 0), new Vector2(-470, 175), new Vector2(190, 190));
+        var rImg = rewindRt.gameObject.AddComponent<Image>(); rImg.sprite = disc; rImg.color = Kit.A(Cyan, 0.7f);
+        rewindBtn = rewindRt.gameObject.AddComponent<HoldButton>();
+        rewindFill = Img(rewindRt, ring, new Vector2(.5f, .5f), Vector2.zero, new Vector2(205, 205));
+        rewindFill.type = Image.Type.Filled; rewindFill.fillMethod = Image.FillMethod.Radial360; rewindFill.fillOrigin = 2; rewindFill.color = Color.white;
+        rewindLabel = Txt(rewindRt, "<<", 60, new Vector2(.5f, .5f), new Vector2(0, 14), Color.white); rewindLabel.fontStyle = FontStyle.Italic; Outline(rewindLabel, 3);
+        var rl = Txt(rewindRt, "REWIND", 30, new Vector2(.5f, .5f), new Vector2(0, -42), Color.white); Outline(rl, 2);
+        // keyboard: a small meter over the hint line
+        rewindKey = Txt(hud, "", 32, new Vector2(.5f, 0), new Vector2(0, 86), Cyan, TextAnchor.MiddleCenter, 900); Outline(rewindKey, 2);
+
+        keysHint = Txt(hud, "MOVE  WASD / ARROWS     JUMP  SPACE (x2 in the air)     REWIND  HOLD SHIFT or Z     CAMERA  Q / E     R  CHECKPOINT", 24, new Vector2(.5f, 0), new Vector2(0, 36), new Color(1, 1, 1, 0.55f), TextAnchor.MiddleCenter, 1900);
         Outline(keysHint, 2);
 
         // top: timer + delta
@@ -200,7 +213,37 @@ public class UI : MonoBehaviour
         bool touch = Application.isMobilePlatform || Input.touchSupported;
         stick.gameObject.SetActive(touch); stick.Base.gameObject.SetActive(touch); stick.Knob.gameObject.SetActive(touch);
         jumpBtn.gameObject.SetActive(touch);
+        rewindBtn.gameObject.SetActive(touch);
+        rewindKey.gameObject.SetActive(!touch);
         keysHint.gameObject.SetActive(!touch);
+    }
+
+    // Rewind meter + the VHS look while scrubbing back + the slow-motion "save it" prompt.
+    public void SetRewind(float meter, bool on, bool prompt)
+    {
+        if (!vhs)
+        {
+            vhsTint = Fill("vhsTint", root).gameObject.AddComponent<Image>(); vhsTint.color = new Color(0.2f, 0.6f, 1f, 0.16f); vhsTint.raycastTarget = false;
+            vhs = Fill("vhs", root).gameObject.AddComponent<Image>(); vhs.sprite = Spr(Scanlines()); vhs.type = Image.Type.Tiled; vhs.color = new Color(1, 1, 1, 0.35f); vhs.raycastTarget = false;
+            rewindBanner = Txt(root, "", 96, new Vector2(.5f, .62f), Vector2.zero, Cyan, TextAnchor.MiddleCenter, 1400); rewindBanner.fontStyle = FontStyle.Italic; Outline(rewindBanner, 5);
+        }
+        rewindFill.fillAmount = meter;
+        rewindFill.color = meter > 0.25f ? Color.white : Kit.A(Pink, 0.9f);
+        rewindRt.localScale = Vector3.one * (prompt ? 1.12f + Mathf.Sin(UnityEngine.Time.unscaledTime * 14f) * 0.08f : on ? 0.92f : 1f);
+        if (rewindKey) rewindKey.text = "REWIND  " + new string('|', Mathf.RoundToInt(meter * 20)).PadRight(20, '.');
+        if (on) vhsT += UnityEngine.Time.unscaledDeltaTime; else vhsT = 0;
+        vhs.gameObject.SetActive(on); vhsTint.gameObject.SetActive(on);
+        if (on) { vhs.rectTransform.anchoredPosition = new Vector2(0, (vhsT * 400f) % 8f); vhsTint.color = new Color(0.2f, 0.6f, 1f, 0.12f + Mathf.Sin(vhsT * 30f) * 0.04f); }
+        rewindBanner.gameObject.SetActive(on || prompt);
+        rewindBanner.text = on ? "<< REWIND" : "HOLD REWIND!";
+        rewindBanner.color = on ? Cyan : (Mathf.Repeat(UnityEngine.Time.unscaledTime, 0.3f) < 0.15f ? Gold : Color.white);
+        rewindBanner.transform.localPosition = on ? new Vector3(Mathf.Sin(vhsT * 40f) * 4f, rewindBanner.transform.localPosition.y, 0) : rewindBanner.transform.localPosition;
+    }
+    static Texture2D Scanlines()
+    {
+        var t = new Texture2D(4, 8, TextureFormat.RGBA32, false); t.wrapMode = TextureWrapMode.Repeat; t.filterMode = FilterMode.Point;
+        for (int y = 0; y < 8; y++) for (int x = 0; x < 4; x++) t.SetPixel(x, y, y < 3 ? new Color(0, 0, 0, 0.55f) : new Color(1, 1, 1, 0.04f));
+        t.Apply(); return t;
     }
 
     public void UpdateHud()
@@ -304,7 +347,7 @@ public class UI : MonoBehaviour
             StartCoroutine(Bob(l.transform, i * 0.8f)); StartCoroutine(Bob(sh, i * 0.8f));
         }
         Title(s, "RUSH", -350, 170, Color.white);
-        var tag = Txt(s, "3D OBBY SPEEDRUNS  -  RACE LIVE ONLINE", 32, new Vector2(.5f, 1), new Vector2(0, -455), Gold, TextAnchor.MiddleCenter, 1000);
+        var tag = Txt(s, "MISS A JUMP?  REWIND TIME  -  RACE LIVE ONLINE", 32, new Vector2(.5f, 1), new Vector2(0, -455), Gold, TextAnchor.MiddleCenter, 1000);
         Outline(tag, 2);
 
         // course cards
@@ -400,11 +443,11 @@ public class UI : MonoBehaviour
         {
             "RUN to the finish as fast as you can",
             "JUMP - and JUMP AGAIN in the air\n(tap lightly for a small hop)",
+            "REWIND! Hold SHIFT / Z or the << button to\nscrub back up to 3 seconds and undo a fall",
             "FLAGS are checkpoints: fall off and\nyou pop back at the last one",
             "SPRINGS launch you  -  ARROWS push you\nRED TILES crumble  -  dodge the SWEEPERS",
-            "3 hidden STARS per course unlock skins",
             "Race YOUR GHOST, the WORLD RECORD,\nor up to 8 real players LIVE",
-            "Touch: left thumb moves, drag right to look\nKeys: WASD + SPACE, Q / E camera, R checkpoint",
+            "Rewind is limited (watch the ring) and the\nclock never stops. A NO-REWIND run = bragging rights",
         };
         for (int i = 0; i < rows.Length; i++)
         {
@@ -443,7 +486,7 @@ public class UI : MonoBehaviour
         Title(s, pb ? "NEW BEST!" : "FINISHED!", -210, 130, pb ? Gold : Color.white);
         var big = Txt(s, Time(g.FinishTime), 150, new Vector2(.5f, 1), new Vector2(0, -380), Color.white, TextAnchor.MiddleCenter, 1000);
         big.fontStyle = FontStyle.Italic; Outline(big, 5);
-        Txt(s, g.Course.name + "   -   " + (g.Falls == 0 ? "NO FALLS!" : g.Falls + (g.Falls == 1 ? " FALL" : " FALLS")), 36, new Vector2(.5f, 1), new Vector2(0, -490), Gold, TextAnchor.MiddleCenter, 1000);
+        Txt(s, g.Course.name + "   -   " + (g.Rewinds == 0 ? "NO-REWIND RUN!" : g.Rewinds + (g.Rewinds == 1 ? " REWIND" : " REWINDS")) + (g.Falls > 0 ? "  -  " + g.Falls + (g.Falls == 1 ? " FALL" : " FALLS") : ""), 36, new Vector2(.5f, 1), new Vector2(0, -490), g.Rewinds == 0 ? Lime : Gold, TextAnchor.MiddleCenter, 1000);
         StarsRow(s, g.RunStars, g.Course.stars.Count, new Vector2(.5f, 1), new Vector2(0, -548), 48, Gold, new Color(1, 1, 1, 0.25f));
         rankText = Txt(s, pb ? "Saving your ghost..." : "PERSONAL BEST  " + Time(g.Save.best[ci]), 36, new Vector2(.5f, 1), new Vector2(0, -610), pb ? Lime : Soft, TextAnchor.MiddleCenter, 1000);
         if (lastRank != null) ApplyRank();

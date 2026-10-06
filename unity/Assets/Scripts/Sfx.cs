@@ -8,7 +8,8 @@ public class Sfx : MonoBehaviour
     const float TAU = Mathf.PI * 2f;
     AudioSource[] voices; int next;
     AudioSource music;
-    AudioClip jump, airJump, land, spring, bonk, crumble, checkpoint, star, fall, beep, go, finish, record, click, whoosh;
+    AudioClip jump, airJump, land, spring, bonk, crumble, checkpoint, star, fall, beep, go, finish, record, click, whoosh, rewind;
+    AudioSource rewindSrc;
     public bool Muted { get; private set; }
     System.Random rnd = new System.Random(7);
     float N() => (float)(rnd.NextDouble() * 2 - 1);
@@ -47,6 +48,13 @@ public class Sfx : MonoBehaviour
     public void Finish(bool pb) => Play(pb ? record : finish, 0.65f);
     public void Click() => Play(click, 0.4f);
     public void Whoosh() => Play(whoosh, 0.35f, Random.Range(0.9f, 1.1f));
+    // tape-rewind warble, looped while held
+    public void Rewind()
+    {
+        if (!rewindSrc) { rewindSrc = gameObject.AddComponent<AudioSource>(); rewindSrc.loop = true; rewindSrc.playOnAwake = false; rewindSrc.clip = rewind; rewindSrc.volume = 0.35f; }
+        rewindSrc.Play();
+    }
+    public void RewindStop() { if (rewindSrc) rewindSrc.Stop(); }
 
     static AudioClip Clip(string n, float[] d) { var c = AudioClip.Create(n, d.Length, 1, SR, false); c.SetData(d, 0); return c; }
     delegate float Gen(float t, float dt);
@@ -96,6 +104,8 @@ public class Sfx : MonoBehaviour
         click = Clip("click", R(0.04f, (t, dt) => { ph += TAU * 1200 * dt; return Mathf.Sin(ph) * Mathf.Exp(-t * 90) * 0.6f; }));
         lp = 0;
         whoosh = Clip("whoosh", R(0.4f, (t, dt) => { lp += (N() - lp) * Mathf.Lerp(0.05f, 0.5f, Mathf.Sin(t / 0.4f * Mathf.PI)); return lp * Mathf.Sin(t / 0.4f * Mathf.PI) * 1.2f; }));
+        float rph = 0; lp = 0;
+        rewind = Clip("rewind", R(0.5f, (t, dt) => { lp += (N() - lp) * 0.2f; rph += TAU * (900f + Mathf.Sin(t * TAU * 6f) * 300f) * dt; return (Mathf.Sin(rph) * 0.25f + lp * 0.35f) * (0.7f + 0.3f * Mathf.Sin(t * TAU * 12f)); }));
     }
 
     // 140 bpm bouncy chiptune-pop in C major: C – G – Am – F, plucky bass, marimba-ish lead.

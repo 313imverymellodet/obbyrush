@@ -33,6 +33,16 @@ public class Game : MonoBehaviour
     public int Cp = -1;                 // last checkpoint reached
     public int RunStars;                // bitmask this run
     public int Falls;
+    // REWIND: the last 3 s of your run are kept; hold rewind to scrub back (2x speed) instead of falling.
+    // A meter limits it (1.5 s of rewinding when full) and refills slowly. The run clock never rewinds.
+    public float RewindMeter = 1f;
+    public int Rewinds, RewindSaves;
+    public bool Rewinding;
+    struct Snap { public Vector3 p, v; public float yaw; public int anim; }
+    readonly System.Collections.Generic.List<Snap> hist = new System.Collections.Generic.List<Snap>();
+    float histT, lastGroundY, slowmo;
+    bool rewindWasHeld, savedThisFall, rewindLock;
+    const int HistMax = 90;   // 3 s at 30 Hz
     public float FinishTime;
     Transform world;
     Light sun;
@@ -181,6 +191,7 @@ public class Game : MonoBehaviour
     {
         Course.ResetRun();
         Cp = -1; RunStars = 0; Falls = 0; FinishTime = 0; respawnT = 0;
+        RewindMeter = 1f; Rewinds = 0; RewindSaves = 0; Rewinding = false; hist.Clear(); slowmo = 0; Time.timeScale = 1f;
         Results.Clear();
         rec.Clear();
         Player.Teleport(Course.start, Course.startYaw);
@@ -287,7 +298,7 @@ public class Game : MonoBehaviour
             {
                 int a = Mathf.CeilToInt(-before - 0.4f), b = Mathf.CeilToInt(-T - 0.4f);
                 if (a != b && b >= 0 && b <= 3) { UI.I.CountdownNumber(b == 0 ? "GO!" : b.ToString(), b == 0); Sfx.I.Beep(b == 0); }
-                if (T >= 0) { State = St.Run; T = 0; }
+                if (T >= 0) { State = St.Run; T = 0; UI.I.Toast(Input.touchSupported ? "MISSED A JUMP?  HOLD  <<  TO REWIND" : "MISSED A JUMP?  HOLD SHIFT TO REWIND"); }
             }
         }
 
@@ -308,12 +319,53 @@ public class Game : MonoBehaviour
         devJumpHold -= dt;
         bool control = State == St.Run && respawnT <= 0;
 
-        if (State != St.Menu)
+        // rewind input: hold Shift / Z, or the touch button
+        bool rewindHeld = control && (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) || Input.GetKey(KeyCode.Z) || UI.I.RewindHeld);
+        if (!rewindHeld) rewindLock = false;   // ran out while held: wait for a release before the next rewind
+        Rewinding = rewindHeld && !rewindLock && RewindMeter > 0.01f && hist.Count > 1 && Time.timeScale > 0f;
+        if (rewindWasHeld && !Rewinding && rewindHeld) rewindLock = true;
+        if (Rewinding && !rewindWasHeld) { Rewinds++; Sfx.I.Rewind(); WebBridge.Event("rewind_used", Rewinds); if (slowmo > 0) { RewindSaves++; WebBridge.Event("rewind_save"); } }
+        if (!Rewinding && rewindWasHeld) Sfx.I.RewindStop();
+        rewindWasHeld = Rewinding;
+
+        if (State != St.Menu && Rewinding)
+        {
+            // scrub back two recorded steps per 30 Hz tick
+            float realDt = Time.unscaledDeltaTime;
+            RewindMeter = Mathf.Max(0, RewindMeter - realDt / 1.5f);
+            histT += realDt;
+            while (histT >= 1f / 60f && hist.Count > 1) { histT -= 1f / 60f; hist.RemoveAt(hist.Count - 1); }
+            var s = hist[hist.Count - 1];
+            Player.Teleport(s.p, s.yaw); Player.Vel = s.v;
+            if (s.anim >= 0) Player.SetAnim(s.anim);
+            slowmo = 0; if (Time.timeScale > 0f) Time.timeScale = 1f; savedThisFall = true;
+            if (State == St.Run) rec.Tick(RunTime, Player);
+        }
+        else if (State != St.Menu)
         {
             Player.Tick(dt, move, jumpPressed, jumpDown, Course, control);
+            if (State == St.Run && control)
+            {
+                histT += dt;
+                if (histT >= 1f / 30f)
+                {
+                    histT = 0;
+                    hist.Add(new Snap { p = Player.transform.position, v = Player.Vel, yaw = Player.Yaw, anim = Player.AnimId });
+                    if (hist.Count > HistMax) hist.RemoveAt(0);
+                }
+                RewindMeter = Mathf.Min(1f, RewindMeter + dt / 14f);
+                // falling into the void with rewind in the tank: slow time and offer the save
+                if (Player.Grounded) { lastGroundY = Player.transform.position.y; savedThisFall = false; }
+                bool doomed = !Player.Grounded && Player.Vel.y < -8f && Player.transform.position.y < lastGroundY - 2.5f && RewindMeter > 0.25f && hist.Count > 20 && !savedThisFall;
+                slowmo = doomed ? Mathf.Min(1f, slowmo + Time.unscaledDeltaTime * 6f) : 0f;
+                // live races stay real-time: the prompt still shows, but only solo runs slow down
+                if (Time.timeScale > 0f) Time.timeScale = slowmo > 0 && !Online ? Mathf.Lerp(1f, 0.22f, slowmo) : 1f;
+            }
             if (State == St.Run) RunRules(dt);
             if (State == St.Run || State == St.Finished) rec.Tick(RunTime, Player);
         }
+        if (State != St.Run && Time.timeScale > 0f && Time.timeScale < 1f) Time.timeScale = 1f;
+        UI.I.SetRewind(RewindMeter, Rewinding, slowmo > 0.2f && !Rewinding);
         jumpPressed = false;
 
         foreach (var g in ghosts) g.Tick(State == St.Menu ? (T % (g.S.Length / GhostCodec.Rate + 2f)) : RunTime);
@@ -346,6 +398,7 @@ public class Game : MonoBehaviour
             {
                 var at = Cp >= 0 ? Course.cps[Cp] : null;
                 Player.Respawn(at != null ? at.pos : Course.start, at != null ? at.yaw : Course.startYaw);
+                hist.Clear(); slowmo = 0; Time.timeScale = 1f;
                 camYaw = at != null ? at.yaw : Course.startYaw;
                 FX.Burst(Player.transform.position + Vector3.up, Color.white, 14);
             }
@@ -354,6 +407,8 @@ public class Game : MonoBehaviour
         if (pos.y < Course.killY)
         {
             respawnT = 0.55f; Falls++;
+            slowmo = 0; if (Time.timeScale > 0f) Time.timeScale = 1f;
+            if (Rewinds == 0 && Falls <= 2) UI.I.Toast("TIP: HOLD REWIND WHILE YOU FALL TO UNDO IT");
             Sfx.I.Fall();
             WebBridge.Vibrate(60);
             return;
@@ -411,6 +466,8 @@ public class Game : MonoBehaviour
 
     void Finish()
     {
+        Time.timeScale = 1f; slowmo = 0;
+        WebBridge.Event(Rewinds == 0 ? "finish_no_rewind" : "finish_rewinds", Rewinds);
         State = St.Finished;
         FinishTime = RunTime;
         resultsT = 2.2f;
@@ -517,7 +574,7 @@ public class Game : MonoBehaviour
 
     public string ShareText()
     {
-        return "OBBY RUSH  " + Course.name + " in " + UI.Time(FinishTime) + (Falls == 0 ? " with ZERO falls" : "") + ". Can you beat my ghost?";
+        return "OBBY RUSH  " + Course.name + " in " + UI.Time(FinishTime) + (Rewinds == 0 ? " with NO REWINDS" : " (" + Rewinds + " rewinds)") + ". Can you beat my ghost?";
     }
 
     [Serializable] public class RankMsg { public int rank, total, best; public bool newBest; public string error, course; }
